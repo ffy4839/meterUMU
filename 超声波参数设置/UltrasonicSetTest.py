@@ -8,8 +8,8 @@ import csv
 import serial.tools.list_ports as LP
 
 
-METERIDS = 100
-CUMULANTS = 100
+METERIDS = 0
+CUMULANTS = 5
 
 WAITING = 20
 INIT_SAVE_DATA = ['numble',
@@ -23,7 +23,7 @@ INIT_SAVE_DATA = ['numble',
             'readSendData',
             'readRecvData',]
 
-TEST_LIST = ['meterID'] #,'model','cumulant','mode','meterTime']
+TEST_LIST = ['meterID','model','cumulant','mode','meterTime']
 
 
 def get_time(st = "%Y-%m-%d %H:%M:%S"):
@@ -128,12 +128,16 @@ class protocol():
 
     def set_model(self, model):
         model_dict = {
-            'G1.6':'02', 'G2.5':'03', 'G4.0':'04',
-            'G4':'04', 'G6.0':'05','G6':'05',
-            'G10':'06', 'G10.0':'06', 'G16':'07',
-            'G16.0':'07','G25':'08','G25.0':'08',
-            'G40':'09', 'G40.0':'09', 'G65':'0A',
-            'G65.0':'0A','G4.0P': '0B', 'G4P': '0B',
+            'G1.6':'02',
+            'G2.5':'03',
+            'G4.0':'04',
+            'G6.0':'05',
+            'G10.0':'06',
+            'G16.0':'07',
+            'G25.0':'08',
+            'G40.0':'09',
+            'G65.0':'0A',
+            'G4.0P': '0B'
         }
         assert model in model_dict.keys()
 
@@ -203,14 +207,36 @@ class protocol():
         if meterID:
             return meterID
 
+#68 AB 57 58 AA AA AA AA AA 12 34 56 78 90 A1 00 1A 90 0F 01 00 00 06 00 00 00 0C 00 00 00 00 00 00 00 00 01 00 01 05 19 07 08 17 6B 16 FF FE FE FE FE FE
     def parse_model(self, data):
-        pass
+        # FE FE FE FE FE 68 AB 57 58 AA AA AA AA AA F2 77 88 99 55 81 00 06 81 0C 01 85 16 02 A5 16 FF FE FE FE FE FE
+        data = data.replace(' ','')
+        n = data[44:46]
+        x = {
+            '02': 'G1.6',
+            '03': 'G2.5',
+            '04': 'G4.0',
+            '05': 'G6.0',
+            '06': 'G10.0',
+            '07': 'G16.0',
+            '08': 'G25.0',
+            '09': 'G40.0',
+            '0A': 'G65.0',
+            '0B': 'G4.0P',
+        }
+        return x[n]
 
     def parse_cumulant(self, data):
-        pass
+    #     FE FE FE FE FE 68 AB 57 58 AA AA AA AA AA 12 34 56 78 90 A1 00 1A 90 0F 01 00 00 06 00 12 D6 80 00 00 00 00 00 00 00 00 01 00 01 05 19 07 08 17 C7 16 FF FE FE FE FE FE
+        data = data.replace(' ','')
+        c = data[48:54]
+        c = str(int(c, 16)).rjust(8,'0')
+        return c
 
     def parse_meterTime(self, data):
-        pass
+        data = data.replace(' ','')
+        c = '19' + data[-12:-4]
+        return c
 
     def checkSum(self, data):
         data = data.replace(' ', '')
@@ -273,10 +299,12 @@ class testCase():
         res = [{'mode': 'model','setData':i,'wishData':i} for i in cumulant_list[:cumulant_list.index(max)+1]]
 
         for i in range(METERIDS-len(res)):
+            c = random.randint(0,999999)
+            c = str(c).rjust(8,'0')
             res.append({
                 'mode': 'model',
-                'setData':i,
-                'wishData':i
+                'setData':c,
+                'wishData':c
             })
 
         self.data_list += res
@@ -287,20 +315,17 @@ class testCase():
         self.data_list += res
 
     def test_meterTime(self,):
+        n_time = get_time(st='%Y%m%d%H%M%S')
+        wn_time = n_time[:10]
         res = [
         {'mode': 'meterTime', 'setData': '20160228235955', 'wishData': '2016022900'},
         {'mode': 'meterTime', 'setData': '20160229235955', 'wishData': '2016030100'},
-        {'mode': 'meterTime', 'setData':, 'wishData':},
         {'mode': 'meterTime', 'setData': '20190228235955', 'wishData': '2019030100'},
         {'mode': 'meterTime', 'setData': '20190229235955', 'wishData': '2019030100'},
 
-        {'mode': 'meterTime', 'setData':, 'wishData':},
-        {'mode': 'meterTime', 'setData':, 'wishData':},
-        {'mode': 'meterTime', 'setData':, 'wishData':},
-        {'mode': 'meterTime', 'setData':, 'wishData':},
-        {'mode': 'meterTime', 'setData':, 'wishData':},
-
+        {'mode': 'meterTime', 'setData': n_time, 'wishData':wn_time},
         ]
+        self.data_list += res
 
 
 class randomset():
@@ -340,6 +365,7 @@ class print_save():
             return True
 
         except Exception as e:
+            self.print_data(data)
             print('{} | 存储失败 | {}'.format(get_time(),str(e)))
 
     def init_save(self):
